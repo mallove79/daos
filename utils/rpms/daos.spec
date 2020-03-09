@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       27%{?relval}%{?dist}
+Release:       28%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -53,6 +53,7 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
+BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -68,7 +69,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: Modules
+BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
@@ -363,6 +364,10 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
+- Change fuse requirement to fuse3
+- Use Lmod for MPI module loading
+
 * Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
 - Update to mercury release 2.0.0~rc1-1
 
@@ -441,7 +446,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
-- bump up go minimum version to 1.12
+- Bump up go minimum version to 1.12
 
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)
