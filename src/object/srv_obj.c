@@ -1664,12 +1664,14 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
+		int    retry = 0;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
 			D_GOTO(out, rc = -DER_CSUM);
 		}
 
+re_fetch:
 		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, orw->orw_epoch,
 			       orw->orw_flags & ORF_EPOCH_UNCERTAIN, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
@@ -1678,6 +1680,18 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth);
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+
+		if (rc == -DER_AGAIN && ++retry < 3) {
+			/* XXX: Currently, we commit the distributed transaction
+			 *	sychronously. Normally, it will be very quickly.
+			 *	So let's wait on the server for a while (30 ms),
+			 *	then retry. If related distributed transaction
+			 *	is still not committed after several cycles try,
+			 *	then replies '-DER_AGAIN' to the client.
+			 */
+			dss_ult_sleep(ioc.ioc_coc->sc_sleep_ult, 30000);
+			goto re_fetch;
+		}
 
 		D_GOTO(out, rc);
 	}
@@ -1865,6 +1879,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	int			type;
 	int			rc;
 	int			rc_tmp;
+	int			retry = 0;
 	bool			recursive = false;
 	struct dtx_handle	dth = {0};
 
@@ -1931,6 +1946,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
 		D_GOTO(failed, rc =  -DER_NONEXIST);
 
+again:
 	/*
 	 * If oei->oei_dti is not zero, an epoch range is not specified by the
 	 * user. (See obj_list_common and obj_req_valid.) oei->oei_epr.epr_hi
@@ -1948,6 +1964,19 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
+	if (rc == -DER_AGAIN && ++retry < 3) {
+		/* XXX: Currently, we commit the distributed transaction
+		 *	sychronously. Normally, it will be very quickly.
+		 *	So let's wait on the server for a while (30 ms),
+		 *	then retry. If related distributed transaction
+		 *	is still not committed after several cycles try,
+		 *	then replies '-DER_AGAIN' to the client.
+		 */
+		dss_ult_sleep(ioc->ioc_coc->sc_sleep_ult, 30000);
+		/* restart the enumeration from the point of last -DER_AGAIN. */
+		goto again;
+	}
+
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
 
@@ -1955,6 +1984,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		" rc %d\n", DP_UOID(oei->oei_oid), param.ip_epr.epr_lo,
 		param.ip_epr.epr_hi, type, dss_get_module_info()->dmi_tgt_id,
 		rc);
+
 failed:
 	return rc;
 }
@@ -2504,6 +2534,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	daos_key_t			*akey;
 	struct obj_io_context		 ioc;
 	struct dtx_handle		 dth = {0};
+	int				 retry = 0;
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -2525,6 +2556,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
+again:
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
 	d_iov_set(&okqo->okqo_akey, NULL, 0);
@@ -2547,6 +2579,18 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 out:
+	if (rc == -DER_AGAIN && ++retry < 3) {
+		/* XXX: Currently, we commit the distributed transaction
+		 *	sychronously. Normally, it will be very quickly.
+		 *	So let's wait on the server for a while (30 ms),
+		 *	then retry. If related distributed transaction
+		 *	is still not committed after several cycles try,
+		 *	then replies '-DER_AGAIN' to the client.
+		 */
+		dss_ult_sleep(ioc.ioc_coc->sc_sleep_ult, 30000);
+		goto again;
+	}
+
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
