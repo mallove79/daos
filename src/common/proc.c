@@ -60,9 +60,6 @@ crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 			return rc;
 		*data = (struct daos_acl *)iov.iov_buf;
 		break;
-	case CRT_PROC_FREE:
-		daos_acl_free(*data);
-		break;
 	default:
 		D_ERROR("bad proc_op %d.\n", proc_op);
 		return -DER_INVAL;
