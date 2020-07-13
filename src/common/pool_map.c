@@ -1394,6 +1394,7 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
  out:
+	pool_tree_free(tree);
 	return rc;
 }
 
