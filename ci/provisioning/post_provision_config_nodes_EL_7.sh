@@ -10,7 +10,6 @@ post_provision_config_nodes() {
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
-    yum -y install yum-utils ed nfs-utils
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
          yum-config-manager --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
@@ -52,8 +51,6 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    yum -y erase metabench mdtest simul IOR compat-openmpi16
-    yum -y install epel-release
     if ! yum -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/yum.repos.d/*.repo; do
