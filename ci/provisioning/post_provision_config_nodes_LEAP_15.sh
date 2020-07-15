@@ -13,13 +13,12 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
 
-    # remove to avoid conflicts
-    if ! zypper --non-interactive rm python2-Fabric Modules && \
+    # remove to avoid conflicts (lua-lmod should probably Conflicts: it)
+    if ! zypper --non-interactive rm Modules && \
        [ ${PIPESTATUS[0]} -ne 104 ]; then
         echo "Failed to remove packages"
         exit 1
     fi
-    zypper --non-interactive in python2-Jinja2 lua-lmod
 
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
@@ -49,18 +48,13 @@ post_provision_config_nodes() {
             zypper --non-interactive ar --gpgcheck-allow-unsigned "${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/ "$repo"
         done
     fi
-    # need to remove ipmctl since 15.2 has 2.0 and 15.1 only had 1.0
-    if ! zypper --non-interactive rm ipmctl && \
-       [ ${PIPESTATUS[0]} -ne 104 ]; then
-        echo "Failed to remove packages"
-        exit 1
-    fi
 
     #if [ -n "$INST_RPMS" ]; then
         #yum -y erase $INST_RPMS
     #fi
 
-    if ! zypper --non-interactive in nfs-kernel-server $INST_RPMS; then
+    # lua-lmod can be removed on the next package image update
+    if ! zypper --non-interactive in lua-lmod $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/zypp/repos.d/*.repo; do
             echo "---- $file ----"
