@@ -51,7 +51,8 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    if ! yum -y install $INST_RPMS; then
+    if [ -n "$INST_RPMS" ] &&
+       ! yum -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/yum.repos.d/*.repo; do
             echo "---- $file ----"
