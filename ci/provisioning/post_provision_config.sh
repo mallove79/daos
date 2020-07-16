@@ -12,8 +12,8 @@ host wolf-*
     LogLevel error
 EOF
 
-DAOS_STACK_LOCAL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
-DAOS_STACK_GROUP_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
+DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
+DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
 
 clush -B -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 clush -B -S -l root -w "$NODESTRING" "MY_UID=$(id -u)
@@ -23,8 +23,8 @@ clush -B -S -l root -w "$NODESTRING" "MY_UID=$(id -u)
                                       GPG_KEY_URLS=\"$GPG_KEY_URLS\"
                                       REPOSITORY_URL=\"$REPOSITORY_URL\"
                                       JENKINS_URL=\"$JENKINS_URL\"
-                                      DAOS_STACK_LOCAL_REPO=\"${!DAOS_STACK_LOCAL_REPO_var}\"
-                                      DAOS_STACK_GROUP_REPO=\"${!DAOS_STACK_GROUP_REPO_var}\"
+                                      DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
+                                      DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var}\"
                                       DISTRO=\"$DISTRO\"
                                       $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
                                       $(cat ci/provisioning/post_provision_config_nodes.sh)"

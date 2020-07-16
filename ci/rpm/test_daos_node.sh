@@ -28,7 +28,7 @@ coproc daos_server --debug start -t 1 --recreate-superblocks
 trap 'set -x; kill -INT $COPROC_PID' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
-  read -t 60 line <&"${COPROC[0]}"
+  read -r -t 60 line <&"${COPROC[0]}"
   echo "Server stdout: $line"
 done
 echo "Server started!"

@@ -45,7 +45,8 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG_ARG="${1:-quick}"
-TEST_TAG_ARR=($TEST_TAG_ARG)
+mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
+
 TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
@@ -144,7 +145,7 @@ fi
 
 trap 'set +e; cleanup' EXIT
 
-CLUSH_ARGS=($CLUSH_ARGS)
+mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
 
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \

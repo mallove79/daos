@@ -15,7 +15,7 @@ post_provision_config_nodes() {
 
     # remove to avoid conflicts (lua-lmod should probably Conflicts: it)
     if ! zypper --non-interactive rm Modules && \
-       [ ${PIPESTATUS[0]} -ne 104 ]; then
+       [ "${PIPESTATUS[0]}" -ne "104" ]; then
         echo "Failed to remove packages"
         exit 1
     fi
@@ -51,7 +51,7 @@ post_provision_config_nodes() {
 
     # need to remove ipmctl since 15.2 has 2.0 and 15.1 only had 1.0
     if ! zypper --non-interactive rm ipmctl && \
-       [ ${PIPESTATUS[0]} -ne 104 ]; then
+       [ "${PIPESTATUS[0]}" -ne "104" ]; then
         echo "Failed to remove packages"
         exit 1
     fi
@@ -60,6 +60,7 @@ post_provision_config_nodes() {
     #fi
 
     # lua-lmod can be removed on the next package image update
+    # shellcheck disable=SC2086
     if ! zypper --non-interactive in lua-lmod $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/zypp/repos.d/*.repo; do

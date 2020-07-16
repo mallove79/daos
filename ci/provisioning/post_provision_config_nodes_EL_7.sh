@@ -44,6 +44,7 @@ post_provision_config_nodes() {
         done
     fi
     if [ -n "$INST_RPMS" ]; then
+        # shellcheck disable=SC2086
         yum -y erase $INST_RPMS
     fi
     for gpg_url in $GPG_KEY_URLS; do
@@ -51,6 +52,7 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
+    # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! yum -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
