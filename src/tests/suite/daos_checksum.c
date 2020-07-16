@@ -165,7 +165,7 @@ struct csum_test_ctx {
 	d_sg_list_t		update_sgl;
 	daos_iod_t		fetch_iod;
 	d_sg_list_t		fetch_sgl;
-	daos_recx_t		recx[4];
+	daos_recx_t		recx[8];
 };
 
 static void
@@ -847,7 +847,6 @@ overwrites_after_first_chunk(void **state)
 		},
 		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
 	});
-
 }
 
 static void
@@ -878,6 +877,22 @@ record_size_larger_than_chunksize(void **state)
 			{.idx = 0, .nr = 100, .data = "A"},
 		},
 		.fetch_recx = {.rx_idx = 0, .rx_nr = 100},
+	});
+}
+
+static void
+larger_record_size_with_second_chunk_half_first(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 64,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 2,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 64 * 2, .data = "One"},
+			{.idx = 0, .nr = 64, .data = "Six"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 64 * 2},
 	});
 }
 
@@ -1462,6 +1477,193 @@ request_non_existent_data(void **state)
 	assert_success(rc);
 }
 
+static void
+unaligned_hole_at_beginning(void **state)
+{
+	daos_size_t chunksize = 8;
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = chunksize,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx=chunksize, .nr=chunksize, .data = "Two"},
+		},
+		.fetch_recx = {
+			.rx_idx=1, .rx_nr=chunksize
+		},
+	});
+}
+
+static void
+bug_rounding_error(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 65536,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 16,
+		.recx_cfgs = {
+			{.idx=931011156, .nr=752674,
+				.data="Lorem ipsum dolor sit amet, consectetu"},
+			{.idx=931011156, .nr=695491,
+				.data="adipiscing elit, sed do eiusmod tempor"},
+		},
+		.fetch_recx = {
+			.rx_idx=931011156, .rx_nr=943009
+		},
+	});
+}
+
+static void
+request_is_after_extent_start(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32768,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx=874741704, .nr=316950,
+    				.data="in reprehenderit in voluptate velit"},
+		},
+		.fetch_recx = {
+			.rx_idx=874939430, .rx_nr=168688
+		},
+	});
+}
+
+#define RAND_ELEM(a) a[rand() % ARRAY_SIZE(a)]
+#define RAND_RANGE(lo, hi) lo + (int)rand() % (hi - lo)
+
+/* [todo-ryon]: Remove to onenote, might not want here right now ?? */
+static void
+random_test(void **state)
+{
+	struct csum_test_ctx	 ctx = {0};
+	int			 i, j;
+	int			 rc;
+
+	daos_size_t chunk_sizes[] = {
+		8 * 1024,
+		16 * 1024,
+		32 * 1024,
+		64 * 1024
+	};
+	daos_size_t record_sizes[] = {
+		1, 8, 16, 20, 512, 520, 1024, 4 * 1024
+	};
+	uint32_t csum_types[] = {
+		CSUM_TYPE_ISAL_CRC16_T10DIF,
+		CSUM_TYPE_ISAL_CRC32_ISCSI,
+		CSUM_TYPE_ISAL_CRC64_REFL,
+	};
+	daos_oclass_id_t obj_types[] = {
+		OC_SX
+	};
+
+	srand(time(0));
+	daos_size_t		 chunksize = RAND_ELEM(chunk_sizes);
+	daos_size_t		 recordsize = RAND_ELEM(record_sizes);
+	daos_oclass_id_t	 oc = RAND_ELEM(obj_types);
+	uint32_t		 csum_type = RAND_ELEM(csum_types);
+
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	setup_cont_obj(&ctx, csum_type, true, chunksize, oc);
+
+	iov_alloc_str(&ctx.dkey, "dkey");
+	iov_alloc_str(&ctx.update_iod.iod_name, "akey");
+	ctx.update_iod.iod_size = recordsize;
+	ctx.update_iod.iod_type = DAOS_IOD_ARRAY;
+	ctx.update_iod.iod_recxs = ctx.recx;
+
+	print_message("Record Size: %lu\nChunk Size: %lu\nChecksum Type: %d\n",
+		      recordsize, chunksize, csum_type);
+
+	uint32_t update_count = RAND_RANGE(1, 5);
+	daos_size_t window_lo = RAND_RANGE(0, 1024 * 1024 * 1024);
+	daos_size_t window_nr = RAND_RANGE(1024, 1024 * 1024);
+	daos_size_t window_hi = window_lo + window_nr - 1;
+	const daos_size_t start_idx = RAND_RANGE(window_lo, window_hi);
+	print_message("\n--== Updating (%d) ==--\n", update_count);
+
+	daos_size_t cur_idx;
+	cur_idx = start_idx;
+	for (i = 0; i < update_count; i++) {
+		daos_size_t data_bytes = 0;
+
+		ctx.update_iod.iod_nr = RAND_RANGE(1, ARRAY_SIZE(ctx.recx));
+		cur_idx = start_idx;
+		for (j = 0; j < ctx.update_iod.iod_nr; j++) {
+			ctx.update_iod.iod_recxs[j].rx_idx = cur_idx;
+			ctx.update_iod.iod_recxs[j].rx_nr = RAND_RANGE(512, 1024 * 1024);
+			cur_idx += ctx.update_iod.iod_recxs[j].rx_nr + RAND_RANGE(1, 512);
+
+			print_message("recx[%d]: "DF_RECX" (%lu records)\n",
+				      j, DP_RECX(ctx.update_iod.iod_recxs[j]), ctx.update_iod.iod_recxs[j].rx_nr);
+			data_bytes += ctx.update_iod.iod_recxs[j].rx_nr * ctx.update_iod.iod_size;
+		}
+
+		print_message("Data Bytes: %lu\n", data_bytes);
+		daos_sgl_init(&ctx.update_sgl, 1);
+		iov_alloc(&ctx.update_sgl.sg_iovs[0], data_bytes);
+		iov_update_fill(ctx.update_sgl.sg_iovs, "RandomData", data_bytes);
+
+		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+				     &ctx.update_iod, &ctx.update_sgl, NULL);
+		D_FREE(ctx.update_sgl.sg_iovs);
+
+		if (rc == -DER_NOSPACE) {
+			/** don't kill the test because random sizes ran out
+			 * of room :-P
+			 */
+			rc = 0;
+			print_message("RAN OUT OF SPACE :-(\n");
+			break;
+		}
+		assert_success(rc);
+	}
+
+	/** Setup Fetch IOD */
+	ctx.fetch_iod.iod_name = ctx.update_iod.iod_name;
+	ctx.fetch_iod.iod_recxs = ctx.update_iod.iod_recxs;
+	ctx.fetch_iod.iod_type = ctx.update_iod.iod_type;
+
+	uint32_t fetch_count = RAND_RANGE(1, 5);
+	print_message("\n--== Fetching (%d) ==--\n", fetch_count);
+	for (i = 0; i < fetch_count; i++) {
+		ctx.fetch_iod.iod_nr = RAND_RANGE(1, ARRAY_SIZE(ctx.recx));
+		/** can change after daos_obj_fetch */
+		ctx.fetch_iod.iod_size = ctx.update_iod.iod_size;
+
+		print_message("Number of recxs: %d\n", ctx.fetch_iod.iod_nr);
+		daos_size_t data_bytes = 0;
+		cur_idx = start_idx;
+
+		for (j = 0; j < ctx.fetch_iod.iod_nr; j++) {
+			ctx.fetch_iod.iod_recxs[j].rx_idx = cur_idx;
+			ctx.fetch_iod.iod_recxs[j].rx_nr = RAND_RANGE(512, 1024 * 1024);
+			cur_idx += ctx.fetch_iod.iod_recxs[j].rx_nr + RAND_RANGE(1, 512);
+			print_message("recx[%d]: "DF_RECX" (%lu records)\n",
+				      j, DP_RECX(ctx.fetch_iod.iod_recxs[j]), ctx.fetch_iod.iod_recxs[j].rx_nr);
+			data_bytes += ctx.fetch_iod.iod_recxs[j].rx_nr * ctx.fetch_iod.iod_size;
+		}
+		assert_int_not_equal(0, data_bytes);
+
+		print_message("Data Bytes: %lu\n", data_bytes);
+		daos_sgl_init(&ctx.fetch_sgl, 1);
+		iov_alloc(&ctx.fetch_sgl.sg_iovs[0], data_bytes);
+
+		rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+				     &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+		D_FREE(ctx.fetch_sgl.sg_iovs);
+
+		assert_success(rc);
+	}
+
+	cleanup_cont_obj(&ctx);
+}
+
 static bool
 rank_in_placement(uint32_t rank, struct daos_obj_layout *placement)
 {
@@ -1938,6 +2140,225 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	cleanup_cont_obj(&ctx);
 }
 
+/* [todo-ryon]: What to do with performance test?? */
+static int
+timebox(int (*cb)(void *), void *arg, uint64_t *nsec, struct timespec *t)
+{
+	struct timespec	start, end;
+	int		rc;
+
+	d_gettime(&start);
+	rc = cb(arg);
+	d_gettime(&end);
+
+	if (nsec)
+		*nsec =  d_timediff_ns(&start, &end);
+
+	if (t)
+		*t = d_timediff(start, end);
+
+	return rc;
+}
+
+static void
+nsec_hr(double nsec, char *buf)
+{
+	int i = 0;
+	char* units[] = {"nsec", "usec", "sec", "min", "hr"};
+	uint32_t divisor[] = {
+		1e3 /** nsec->usec */,
+		1e6 /** usec->sec */,
+		60 /** sec->min */,
+		60 /** min->hr */};
+
+	while (nsec >= divisor[i]) {
+		nsec /= divisor[i];
+		i++;
+	}
+	sprintf(buf, "%.*f %s", i, nsec, units[i]);
+}
+
+int update_cb(void *arg)
+{
+	struct csum_test_ctx *ctx = arg;
+
+	return daos_obj_update(ctx->oh, DAOS_TX_NONE, 0, &ctx->dkey, 1,
+			       &ctx->update_iod, &ctx->update_sgl,
+			       NULL);
+}
+
+int fetch_cb(void *arg)
+{
+	struct csum_test_ctx *ctx = arg;
+
+	return daos_obj_fetch(ctx->oh, DAOS_TX_NONE, 0, &ctx->dkey, 1,
+			    &ctx->fetch_iod, &ctx->fetch_sgl, NULL, NULL);
+}
+
+/**
+ * For Array Types
+ * Using the provided configuration (\args) time an object update
+ */
+struct performance_test_args {
+	uint32_t		 csum_prop_type;
+	bool			 server_verify;
+	size_t			 chunksize;
+	size_t			 data_size;
+};
+
+struct timed_results {
+	uint64_t update_usec;
+	uint64_t fetch_usec;
+};
+
+static struct timed_results
+time_update_fetch(test_arg_t *test_arg, struct performance_test_args *args,
+		  bool verbose)
+{
+	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = OC_SX;
+	size_t			data_size = args->data_size;
+	struct timed_results	result = {0};
+	int			rc;
+
+	d_iov_set(&ctx.dkey, "dkey", strlen("dkey"));
+	d_iov_set(&ctx.update_iod.iod_name, "akey", strlen("akey"));
+
+	/** setup the buffers for update & fetch */
+	d_sgl_init(&ctx.update_sgl, 1);
+	iov_alloc(&ctx.update_sgl.sg_iovs[0], data_size);
+	assert_non_null(&ctx.update_sgl.sg_iovs[0]);
+
+	d_sgl_init(&ctx.fetch_sgl, 1);
+	iov_alloc(&ctx.fetch_sgl.sg_iovs[0], data_size);
+	assert_non_null(&ctx.fetch_sgl.sg_iovs[0]);
+
+	/** Setup Update IOD */
+	ctx.recx[0].rx_idx = 0;
+	ctx.recx[0].rx_nr = data_size;
+	ctx.update_iod.iod_size = 1;
+	ctx.update_iod.iod_nr	= 1;
+	ctx.update_iod.iod_recxs = ctx.recx;
+	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;
+
+	/** Setup Fetch IOD*/
+	ctx.fetch_iod.iod_name = ctx.update_iod.iod_name;
+	ctx.fetch_iod.iod_size = ctx.update_iod.iod_size;
+	ctx.fetch_iod.iod_recxs = ctx.update_iod.iod_recxs;
+	ctx.fetch_iod.iod_nr = ctx.update_iod.iod_nr;
+	ctx.fetch_iod.iod_type = ctx.update_iod.iod_type;
+
+	setup_from_test_args(&ctx, test_arg);
+	setup_cont_obj(&ctx, args->csum_prop_type, args->server_verify,
+		       args->chunksize, oc);
+
+	iov_update_fill(&ctx.update_sgl.sg_iovs[0], "ABC", data_size);
+
+	char buf[1024] = {0};
+	uint64_t update_nsec = 0;
+	uint64_t fetch_nsec = 0;
+	struct timespec update_time = {0};
+	struct timespec fetch_time = {0};
+
+	rc = timebox(update_cb, &ctx, &update_nsec, &update_time);
+	assert_success(rc);
+	nsec_hr(update_nsec, buf);
+	if (verbose)
+		print_message("Update took %s \n", buf);
+
+	rc = timebox(fetch_cb, &ctx, &fetch_nsec, &fetch_time);
+	nsec_hr(fetch_nsec, buf);
+	if (verbose)
+		print_message("Fetch took %s \n", buf);
+	assert_success(rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+
+	result.update_usec = d_time2us(update_time);
+	result.fetch_usec = d_time2us(fetch_time);
+
+	return result;
+}
+
+static struct timed_results
+avg_perf_result(struct timed_results array[], uint32_t nr)
+{
+	int i;
+	struct timed_results result = {0};
+
+	for (i = 0; i < nr; i++) {
+		/** avoid overflow */
+		assert_true(result.update_usec + array[i].update_usec > result.update_usec);
+		assert_true(result.fetch_usec + array[i].fetch_usec > result.fetch_usec);
+		result.update_usec += array[i].update_usec;
+		result.fetch_usec += array[i].fetch_usec;
+	}
+
+	result.update_usec /= nr;
+	result.fetch_usec /= nr;
+
+	return result;
+}
+
+static uint64_t
+delta_perc(uint64_t a, uint64_t b)
+{
+	if (b > a)
+		return 0;
+	return ((a - b) * 100) / a;
+}
+
+/* [todo-ryon]: make more like ior */
+static void
+performance_check(void **state)
+{
+#define SAMPLE_NR 10
+	struct timed_results samples[SAMPLE_NR] = {0};
+	uint32_t i;
+
+	struct performance_test_args test_args =
+		{
+			.data_size =  1024 * 1024,
+			.chunksize = 1024,
+			.server_verify = false,
+			.csum_prop_type = DAOS_PROP_CO_CSUM_OFF
+		};
+
+	for (i = 0; i < SAMPLE_NR; ++i) {
+		samples[i] = time_update_fetch(*state, &test_args, 0);
+	}
+	struct timed_results avg = avg_perf_result(samples, SAMPLE_NR);
+	print_message("Averages w/o checksum\n\tUpdate: %lu\n\tFetch: %lu\n",
+		      avg.update_usec, avg.fetch_usec);
+
+	test_args.csum_prop_type = DAOS_PROP_CO_CSUM_CRC64;
+	test_args.server_verify = true;
+	for (i = 0; i < SAMPLE_NR; ++i) {
+		samples[i] = time_update_fetch(*state, &test_args, 0);
+	}
+
+	struct timed_results csum_avg = avg_perf_result(samples, SAMPLE_NR);
+	print_message("Averages w/ checksum\n\tUpdate: %lu\n\tFetch: %lu\n",
+		      csum_avg.update_usec, csum_avg.fetch_usec);
+
+	print_message("Update Performance Impact: %lu\n",
+		      delta_perc(csum_avg.update_usec, avg.update_usec));
+
+	uint64_t fetch_percent_increase = delta_perc(csum_avg.fetch_usec,
+						     avg.fetch_usec);
+	uint64_t fetch_delta = csum_avg.fetch_usec - avg.fetch_usec;
+
+	print_message("Fetch Performance Impact: %lu\n",
+		      fetch_percent_increase);
+
+	if (fetch_percent_increase > 10) {
+		fail_msg("Fetch impact (%lu%%) greater than 10%% (%lu)",
+			fetch_percent_increase, fetch_delta);
+	}
+}
+
 static int
 setup(void **state)
 {
@@ -1963,9 +2384,11 @@ static const struct CMUnitTest csum_tests[] = {
 		  unaligned_record_size),
 	CSUM_TEST("DAOS_CSUM03.3: Record size is larger than chunk size",
 		record_size_larger_than_chunksize),
-	CSUM_TEST("DAOS_CSUM03.4: Setup multiple overlapping/unaligned extents",
+	CSUM_TEST("DAOS_CSUM03.4: Record size is 20",
+		  larger_record_size_with_second_chunk_half_first),
+	CSUM_TEST("DAOS_CSUM03.5: Setup multiple overlapping/unaligned extents",
 		  overlapping_after_first_chunk),
-	CSUM_TEST("DAOS_CSUM03.5: Request the second half of a chunk",
+	CSUM_TEST("DAOS_CSUM03.6: Request the second half of a chunk",
 		  request_second_half_of_chunk),
 	CSUM_TEST("DAOS_CSUM04.1: With holes between extents. All in 1 chunk",
 		  extents_with_holes_1),
@@ -1997,7 +2420,13 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
 	CSUM_TEST("DAOS_CSUM15: Request non existent data",
 		  request_non_existent_data),
-
+	CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning", unaligned_hole_at_beginning),
+	CSUM_TEST("DAOS_CSUM17: Through some random testing found a rounding "
+		  "error", bug_rounding_error),
+	CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
+		  "beginning of the stored extent",
+		  request_is_after_extent_start),
+	CSUM_TEST("Random", random_test),
 	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
 	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
 		  rebuild_2),
@@ -2006,6 +2435,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM_REBUILD05: SV, Data not inlined, not bulk",
 		  rebuild_5),
 	CSUM_TEST("DAOS_CSUM_REBUILD06: SV, Data bulk transfer", rebuild_6),
+	CSUM_TEST("PERF Basic", performance_check),
 
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
@@ -2013,20 +2443,46 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
 };
 
+static int
+run_csum_tests(int rc)
+{
+	rc += cmocka_run_group_tests_name("DAOS Checksum Tests",
+		  csum_tests, setup,
+		  test_teardown);
+	return rc;
+}
+
 int
 run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int i;
 
-	if (rank == 0) {
-		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
-				csum_tests, setup, test_teardown);
+	if (rank != 0) {
+		MPI_Barrier(MPI_COMM_WORLD);
+		return 0;
+	}
+
+	if (sub_tests_size == 0) {
+		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
+			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
+			     i <= DAOS_PROP_CO_CSUM_SHA512; i++) {
+				dts_csum_prop_type = i;
+				print_message("Running tests with csum_type: "
+					      "%d\n", i);
+				rc = run_csum_tests(rc);
+			}
 		} else {
-			rc = run_daos_sub_tests("DAOS Checksum Tests",
-				csum_tests, ARRAY_SIZE(csum_tests), sub_tests,
-				sub_tests_size, setup, test_teardown);
+			rc = run_csum_tests(rc);
 		}
+
+	} else {
+		rc = run_daos_sub_tests("DAOS Checksum Tests",
+					csum_tests,
+					ARRAY_SIZE(csum_tests),
+					sub_tests,
+					sub_tests_size, setup,
+					test_teardown);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
