@@ -26,6 +26,7 @@ fi
   cp -r . "$artdir"
 fi)
 
-if ls $mockroot/root/builddir/build/BUILD/daos-*/config"${ARCH}".log; then
-    mv $mockroot/root/builddir/build/BUILD/daos-*/config"${ARCH}".log ${artdir}/config.log-rpm
+if ls "$mockroot"/root/builddir/build/BUILD/daos-*/config"${ARCH}".log; then
+    mv "$mockroot"/root/builddir/build/BUILD/daos-*/config"${ARCH}".log \
+        "${artdir}"/config.log-rpm
 fi
