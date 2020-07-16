@@ -43,11 +43,11 @@ class _env_module(): # pylint: disable=invalid-name
                                              os.path.sep +
                                              os.path.join("etc",
                                                           "modulefiles")] +
-                                             os.environ.get("MODULEPATH",
-                                                            "").split(":"))
+                                            os.environ.get("MODULEPATH",
+                                                           "").split(":"))
         self._module_load = self._init_mpi_module()
 
-    def _module_func(self, command, *arguments):
+    def _module_func(self, command, *arguments): # pylint: disable=no-self-use
         num_args = len(arguments)
         cmd = ['/usr/share/lmod/lmod/libexec/lmod', 'python', command]
         if num_args == 1:

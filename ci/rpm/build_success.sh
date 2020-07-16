@@ -19,7 +19,7 @@ mockroot="/var/lib/mock/${CHROOT_NAME}"
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
 (cd "$mockroot/result/" && cp -r . "$OLDPWD/artifacts/${TARGET}"/)
-createrepo artifacts/${TARGET}/
+createrepo artifacts/"${TARGET}"/
 rpm --qf "%{version}-%{release}.%{arch}" \
     -qp artifacts/"${TARGET}"/daos-server-*.x86_64.rpm > "${TARGET}-rpm-version"
 cat "$mockroot"/result/{root,build}.log
