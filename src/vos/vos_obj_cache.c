@@ -160,7 +160,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 	int	rc;
 
 	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
-	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
+	rc = daos_lru_cache_create(cache_size, 0,
 				   &obj_lru_ops, occ);
 	if (rc)
 		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
