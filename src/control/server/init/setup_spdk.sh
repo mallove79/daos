@@ -88,7 +88,7 @@ else
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-        # shellcheck disable=SC2086
+		# shellcheck disable=SC2086
 		if list=$(ls -d $glob); then
 			echo "RUN: ls -d $glob | xargs -r chown -R "
 			echo -n "$_TARGET_USER"

@@ -466,7 +466,6 @@ pipeline {
                         }
                     }
                     steps {
-                        sh 'env | sort'
                         sconsBuild clean: "_build.external${arch}",
                                    parallel_build: parallel_build(),
                                    log_to_file: 'centos7-gcc-build.log',
@@ -788,9 +787,6 @@ pipeline {
                         }
                     }
                     steps {
-                        sh 'rpm -q libatomic1 || true'
-                        sh 'find / -name libatomic.so\\* || true'
-                        sh 'env | sort'
                         sconsBuild clean: "_build.external${arch}",
                                    prebuild: 'rm -rf bandit.xml',
                                    parallel_build: parallel_build(),
@@ -994,7 +990,7 @@ pipeline {
                                                   'spdk-devel libfabric-devel '+
                                                   'pmix numactl-devel ' +
                                                   'libipmctl-devel ' +
-						                          'python36-tabulate ' +
+                                                  'python36-tabulate ' +
                                                   qb_inst_rpms
                         timeout(time:60, unit:'MINUTES') {
                           runTest stashes: [ 'centos7-gcc-tests',
