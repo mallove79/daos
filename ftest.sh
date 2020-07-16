@@ -206,33 +206,6 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest
 .
 wq
 EOF
-    # work-around DCO-9102
-    if [ -f /etc/sysconfig/network/ifcfg-eth0 ]; then
-        cat /etc/sysconfig/network/ifcfg-eth0 || true
-    fi
-    (
-    ip addr ls || ifconfig -a || true
-    plumbed=false
-    unplumb=()
-    while read addr bits; do
-        if [ \\\$bits = 32 ]; then
-            if ! echo ip addr add \\\$addr/16 dev eth0; then
-                echo \\\"ip addr add returned \\\${PIPELINE_STATUS[0]}\\\"
-            fi
-            echo ip addr del \\\$addr/32 dev eth0
-            plumbed=true
-        else
-            unplumb+=(\\\$addr/\\\$bits)
-        fi
-    done < <(ip addr ls dev eth0 |
-             sed -n -e 's/^  *inet \(.*\)\/\([0-9]*\) .*/\1 \2/p')
-    if \\\$plumbed; then
-        for i in \\\${unplumb[@]}; do
-            echo ip addr del \\\$i dev eth0
-        done
-    fi
-    ip addr ls || ifconfig -a || true
-    ) 2>&1 | tee /tmp/fix-interface.debug
     mount \\\"$DAOS_BASE\\\"
 fi\"
 
