@@ -145,11 +145,6 @@ fi
 
 trap 'set +e; cleanup' EXIT
 
-# doesn't work: mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
-# shellcheck disable=SC2206
-# is this actually not needed?
-#CLUSH_ARGS=($CLUSH_ARGS)
-
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
