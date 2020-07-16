@@ -12,15 +12,17 @@ post_provision_config_nodes() {
     fi
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
-         yum-config-manager --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
+         yum-config-manager \
+             --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
     fi
-    
+
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
         rm -f /etc/yum.repos.d/*"$DAOS_STACK_LOCAL_REPO"
         yum-config-manager --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_LOCAL_REPO"
-        echo "gpgcheck = False" >> /etc/yum.repos.d/*"${DAOS_STACK_LOCAL_REPO//\//_}".repo
+        echo "gpgcheck = False" >> \
+            /etc/yum.repos.d/*"${DAOS_STACK_LOCAL_REPO//\//_}".repo
     fi
-    
+
     if [ -n "$INST_REPOS" ]; then
         for repo in $INST_REPOS; do
             branch="master"

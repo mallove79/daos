@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import os
-import subprocess
 from env_modules import load_mpi
 from command_utils_base import EnvironmentVariables
 from general_utils import run_command, DaosTestError
@@ -54,15 +53,16 @@ class MpioUtils():
         load_mpi('mpich')
 
         # checking mpich install
-        cmd = '''/usr/bin/ssh {} "set -e
-                                  export MODULEPATH=/usr/share/modules:/etc/modulefiles
-                                  for mod in mpi/mpich-x86_64 gnu-mpich; do
-                                      if module is-avail $mod >/dev/null 2>&1; then
-                                          module load $mod >/dev/null 2>&1
-                                          break
-                                      fi
-                                  done
-                                  command -v mpichversion"'''.format(hostlist[0])
+        cmd = '''/usr/bin/ssh {} \
+            "set -e
+            export MODULEPATH=/usr/share/modules:/etc/modulefiles
+            for mod in mpi/mpich-x86_64 gnu-mpich; do
+                if module is-avail $mod >/dev/null 2>&1; then
+                    module load $mod >/dev/null 2>&1
+                    break
+                fi
+            done
+            command -v mpichversion"'''.format(hostlist[0])
         try:
             result = run_command(cmd)
             self.mpichinstall = \

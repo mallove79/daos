@@ -145,7 +145,9 @@ fi
 
 trap 'set +e; cleanup' EXIT
 
-mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
+# doesn't work: mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
+# shellcheck disable=SC2206
+CLUSH_ARGS=($CLUSH_ARGS)		￼
 
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
@@ -222,7 +224,7 @@ EOF
         else
             unplumb+=(\\\$addr/\\\$bits)
         fi
-    done < <(ip addr ls dev eth0 | 
+    done < <(ip addr ls dev eth0 |
              sed -n -e 's/^  *inet \(.*\)\/\([0-9]*\) .*/\1 \2/p')
     if \\\$plumbed; then
         for i in \\\${unplumb[@]}; do
@@ -359,8 +361,8 @@ index 1fc84844b..17e6215d0 100644
  TIMEOUT_PROCESS_ALIVE = 60
 +#: extra timeout to give to a test in TEARDOWN phase
 +TIMEOUT_TEARDOWN = 60
- 
- 
+
+
  def add_runner_failure(test_state, new_status, message):
 @@ -219,7 +221,7 @@ def finish(self, proc, started, step, deadline, result_dispatcher):
          wait.wait_for(lambda: not proc.is_alive() or self.status, 1, 0, step)
@@ -372,7 +374,7 @@ index 1fc84844b..17e6215d0 100644
                  if wait.wait_for(lambda: not proc.is_alive(), 1, 0, step):
                      return self._add_status_failures(self.status)
 @@ -422,7 +424,12 @@ def sigtstp_handler(signum, frame):     # pylint: disable=W0613
- 
+
          while True:
              try:
 -                if time.time() >= deadline:
@@ -427,7 +429,8 @@ else
     process_cores=\"\"
 fi
 # now run it!
-if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
+                 ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
