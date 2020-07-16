@@ -13,13 +13,6 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
 
-    # remove to avoid conflicts (lua-lmod should probably Conflicts: it)
-    if ! zypper --non-interactive rm Modules && \
-       [ "${PIPESTATUS[0]}" -ne "104" ]; then
-        echo "Failed to remove packages"
-        exit 1
-    fi
-
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
         zypper --non-interactive ar \
@@ -65,7 +58,8 @@ post_provision_config_nodes() {
 
     # lua-lmod can be removed on the next package image update
     # shellcheck disable=SC2086
-    if ! zypper --non-interactive in lua-lmod $INST_RPMS; then
+    if [ -n "$INST_RPMS" ] && \
+       ! zypper --non-interactive in $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/zypp/repos.d/*.repo; do
             echo "---- $file ----"
