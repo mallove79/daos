@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@corci-918d") _
 
 def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -190,6 +191,7 @@ pipeline {
     }
 
     environment {
+        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -481,6 +483,57 @@ pipeline {
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'NO_CI_TESTING',
+                                  value: 'true' }
+                            expression {
+                                cachedCommitPragma(pragma: 'Skip-bullseye',
+                                                   def_val: 'true') != 'true'
+                            }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   test_files: ci/test_files_to_stash.txt
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-covc-centos7",
+                                         tools: [ gcc4(pattern: 'centos7-covc-build.log'),
+                                                  cppCheck(pattern: 'centos7-covc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-covc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
                         }
                     }
@@ -890,6 +943,46 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! skip_stage('run_test') }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                            }
+                        }
+                        unitTest timeout_time: 60,
+                                 inst_repos: el7_component_repos + ' ' +
+                                             component_repos(),
+                                 inst_rpms: 'gotestsum openmpi3 ' +
+                                            'hwloc-devel argobots ' +
+                                            'fuse3-libs fuse3 ' +
+                                            'boost-devel ' +
+                                            'libisa-l-devel libpmem ' +
+                                            'libpmemobj protobuf-c ' +
+                                            'spdk-devel libfabric-devel '+
+                                            'pmix numactl-devel ' +
+                                            'libipmctl-devel ' +
+                                            'python36-tabulate' +
+                                            qb_inst_rpms
+
+                    }
+                    post {
+                      always {
+                            unitTestPost()
+                        }
+                    }
+                }
+                stage('Unit test Bullseye') {
+                    when {
+                      beforeAgent true
+                      expression {
+                          cachedCommitPragma(pragma: 'Skip-bullseye',
+                                             def_val: 'true') != 'true'
+                      }
                     }
                     agent {
                         label 'ci_vm1'
