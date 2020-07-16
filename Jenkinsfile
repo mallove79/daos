@@ -204,8 +204,12 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg REPO_EL8=' + env.DAOS_STACK_EL_8_LOCAL_REPO
     }
     if (env.DAOS_STACK_LEAP_15_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_LEAP15=' +
+      ret_str += ' --build-arg REPO_LOCAL_LEAP15=' +
                  env.DAOS_STACK_LEAP_15_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_LEAP_15_GROUP_REPO) {
+      ret_str += ' --build-arg REPO_GROUP_LEAP15=' +
+                 env.DAOS_STACK_LEAP_15_GROUP_REPO
     }
     if (env.HTTP_PROXY) {
       ret_str += ' --build-arg HTTP_PROXY="' + env.HTTP_PROXY + '"'
@@ -543,7 +547,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
@@ -592,7 +596,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }

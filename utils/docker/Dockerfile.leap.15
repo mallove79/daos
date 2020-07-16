@@ -1,7 +1,9 @@
 # Copyright (C) 2018-2020 Intel Corporation
 # All rights reserved.
 #
-# Copyright 2019-2020, Intel Corporation
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
 #
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions, and the following disclaimer.
@@ -78,6 +80,20 @@ ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
+
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
@@ -88,13 +104,18 @@ RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/sha
 ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
-ARG CART_COMMIT=""
 ARG REPOS=""
-RUN if $QUICKBUILD; then                                                                                         \
-        zypper --non-interactive addrepo --no-gpgcheck                                                           \
-               http://repo.dc.hpdd.intel.com/repository/daos-stack-leap-15-x86_64-stable-local/ daos-local;      \
-        zypper --non-interactive addrepo --no-gpgcheck                                                           \
-               http://repo.dc.hpdd.intel.com/repository/daos-stack-external-leap-15-x86_64-stable-group/ leap15; \
+ARG REPO_URL=""
+ARG REPO_LOCAL_LEAP15=""
+ARG REPO_GROUP_LEAP15=""
+RUN if $QUICKBUILD; then                                                                                 \
+        for REPO_LEAP15 in $REPO_LOCAL_LEAP15 $REPO_GROUP_LEAP15; do                                             \
+            MY_REPO="${REPO_URL}${REPO_LEAP15}";                                                                 \
+            MY_NAME="${MY_REPO#*//}";                                                                            \
+            MY_NAME="${MY_NAME//\//_}";                                                                          \
+            zypper --non-interactive addrepo --no-gpgcheck                                                       \
+                   ${MY_REPO} ${MY_NAME};                                                                        \
+        done;                                                                                                    \
         for repo in $REPOS; do                                                                                   \
             branch="master";                                                                                     \
             build_number="lastSuccessfulBuild";                                                                  \
@@ -110,13 +131,10 @@ RUN if $QUICKBUILD; then                                                        
                    ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/   \
                    $repo:$branch:$build_number;                                                                  \
         done;                                                                                                    \
-        zypper --non-interactive --gpg-auto-import-keys refresh leap15;                                          \
         echo "Installing: $QUICKBUILD_DEPS";                                                                     \
         echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf;                                           \
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
-
-RUN zypper --non-interactive install https://download.opensuse.org/distribution/leap/15.2/repo/oss/x86_64/scons-3.1.2-lp152.2.1.x86_64.rpm
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
