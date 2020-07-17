@@ -1,7 +1,9 @@
 #!/bin/bash
 
 post_provision_config_nodes() {
-    local yum_repo_args="--disablerepo=* --enablerepo=repo.dc.hpdd.intel.com_repository_*"
+    local yum_repo_args="--disablerepo=*"
+    yum_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
+    yum_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
     if $CONFIG_POWER_ONLY; then
         rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         yum -y erase fio fuse ior-hpc mpich-autoload               \
