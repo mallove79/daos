@@ -594,9 +594,6 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 	struct list_pools_iter_args	 iter_args;
 	int				 rc;
 
-	/* Nothing should be calling this now */
-	return -DER_NOSYS;
-
 	*poolsp = NULL;
 	*pools_len = 0;
 
