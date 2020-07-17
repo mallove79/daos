@@ -1,6 +1,7 @@
 #!/bin/bash
 
 post_provision_config_nodes() {
+    YUM_REPO_ARGS="--disablerepo=\* --enablerepo=repo.dc.hpdd.intel.com_repository_\*"
     if $CONFIG_POWER_ONLY; then
         rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         yum -y erase fio fuse ior-hpc mpich-autoload               \
@@ -56,7 +57,7 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! yum -y install $INST_RPMS; then
+       ! yum -y $YUM_REPO_ARGS install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/yum.repos.d/*.repo; do
             echo "---- $file ----"
